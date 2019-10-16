@@ -104,7 +104,11 @@ float Lz[3][2]={{16.37,24.2094},{91.02,513.11},{8376,61540.3}};
 float Ly[3][2]={{16.37,24.2094},{91.02,513.11},{8376,61540.3}};
 
 
-float dt = 0.001;
+float dt = 0.00125;
+float movmeanY[100];
+float movmeanZ[100];
+float meanY;
+float meanZ;
 
 int cont = 0;
 
@@ -123,6 +127,7 @@ void set_pwmZ(float saida);
 void set_dirY(float saida);
 void set_dirZ(float saida);
 void get_ALC();
+void get_movmeanY(float value);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -140,7 +145,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  ydata[0]+=ydata[1]*dt;
 	  zdata[0]+=zdata[1]*dt;
 
-	  	  //Observador:
+	  //Observador:
 	  yy[0]=ydata[0];
 	  yy[1]=ydata[1];
 
@@ -199,25 +204,32 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  zhatant[2]=zhat[2];
 
 
-	  //gera a saida
+	  //Gera a saida
 
 
-	  uz = 0 - (zhat[0]*Kz[0]+zhat[1]*Kz[1]+zhat[2]*Kz[2]);
-	  uy = 0 - (yhat[0]*Ky[0]+yhat[1]*Ky[1]+yhat[2]*Ky[2]);
+	  uz = -(zhat[0]*Kz[0]+zhat[1]*Kz[1]+zhat[2]*Kz[2]);
+	  uy = -(yhat[0]*Ky[0]+yhat[1]*Ky[1]+yhat[2]*Ky[2]);
 
+	  if(uy<5 & uy>-5)
+	  {
+		  meanY=0;
+	  }else
+	  {
+		  meanY=uy;
+	  }
 
 	  set_pwmY(uy);
 	  set_pwmZ(uz);
-
-	  if(cont>=100)
+	  set_dirY(uy);
+	  set_dirZ(uz);
+	 /* if(cont>=100)
 	  {
-		  set_dirY(uy);
-		  set_dirZ(uz);
+
 		  cont=0;
 	  }else
 	  {
 		  cont++;
-	  }
+	  }*/
   }
 }
 
@@ -252,6 +264,7 @@ void set_dirZ(float saida)
 	HAL_GPIO_WritePin(dirZa_GPIO_Port, dirZa_Pin, motorZ[0]);
 	HAL_GPIO_WritePin(dirZb_GPIO_Port, dirZb_Pin, motorZ[1]);
 }
+
 void get_ALC()
 {
 	ALCy[0][0]=Ay[0][0] - (Ly[0][0]*Cy[0][0]+Ly[0][1]*Cy[1][0]);
@@ -276,7 +289,6 @@ void get_ALC()
 	ALCz[2][2]=Az[2][2] - (Lz[2][0]*Cz[0][2]+Lz[2][1]*Cz[1][2]);
 }
 
-
 void set_pwmY(float saida)
 {
 	saida=saida*8000;
@@ -291,6 +303,7 @@ void set_pwmY(float saida)
 	}
 	__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1,pwmY);
 }
+
 void set_pwmZ(float saida)
 {
 	saida=saida*8000;
@@ -306,6 +319,19 @@ void set_pwmZ(float saida)
 	}
 	__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_3,pwmZ);
 
+}
+
+void get_movmeanY(float value)
+{
+	for (int k = 1; k < 100; ++k) {
+		movmeanY[k] = movmeanY[k-1];
+	}
+	movmeanY[0] = value;
+	float sum = 0;
+	for (int x = 0; x < 100; ++x) {
+		sum = sum + movmeanY[x];
+	}
+	meanY = sum/100;
 }
 /* USER CODE END 0 */
 
@@ -471,7 +497,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 96;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1000;
+  htim2.Init.Period = 1236;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -599,11 +625,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : OTG_FS_PowerSwitchOn_Pin PC1 */
-  GPIO_InitStruct.Pin = OTG_FS_PowerSwitchOn_Pin|GPIO_PIN_1;
+  /*Configure GPIO pin : OTG_FS_PowerSwitchOn_Pin */
+  GPIO_InitStruct.Pin = OTG_FS_PowerSwitchOn_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(OTG_FS_PowerSwitchOn_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PC1 dirZa_Pin dirZb_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|dirZa_Pin|dirZb_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA0 */
@@ -627,13 +660,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : dirZa_Pin dirZb_Pin */
-  GPIO_InitStruct.Pin = dirZa_Pin|dirZb_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : OTG_FS_OverCurrent_Pin */
   GPIO_InitStruct.Pin = OTG_FS_OverCurrent_Pin;
