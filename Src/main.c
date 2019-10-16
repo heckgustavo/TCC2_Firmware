@@ -80,29 +80,35 @@ float Lzyz[3];
 //COISAS PARA ALTERAR:
 
 //sistema eixo Y
-
+float Ay[3][3] = {{0, 1, 0}, {20.0515, 0, 0.1348}, {-20.0515, 0, 5.5058}};
 float By[3]={0,-2.2887, 93.4769}; //Matriz B (eixo Y)
-float ALCy[3][3]={{-1.9995, 0.0510, 0},{1.4826, -10.5063, 0.11348},{82.6962, -459.3545, 5.5058}}; //Matriz A-LC (eixo Y)
+float Cy[2][3]={{1, 0, 0},{0, 1, 0}};
+float ALCy[3][3];
 
 //sistema eixo Z
+float Az[3][3] = {{0, 1, 0}, {20.0488, 0, 0.1348}, {-20.0488, 0, 5.4894}};
+float Bz[3]={0,-2.2884,93.1993};
+float Cz[2][3]={{1, 0, 0},{0, 1, 0}};
+float ALCz[3][3];
 
-float Bz[3]={0,-2.2884,93.1993}; //Matriz B (eixo Z)
-float ALCz[3][3]={{-1.9995, 0.0511, 0},{1.4798, -10.4899, 0.1348},{82.3564, -457.4749, 5.4894}}; //Matriz A-LC (eixo Z)
+//Ganhos [ORIGINAL]
+//float Ly[3][2]={{1.9995,0.9490},{18.5689,10.5063},{-102.7477,459.3545}};
+//float Lz[3][2]={{1.9995,0.9489},{18.5690,10.4899},{-102.4052,459.4749}};
+//float Ky[3] = {65.9847, 11.6463, 0.9046};
+//float Kz[3] = {66.2867, 11.7091, 0.9086};
 
 
-//Ganhos
-float Ly[3][2]={{1.9995,0.9490},{18.5689,10.5063},{-102.7477,459.3545}};
-float Lz[3][2]={{1.9995,0.9489},{18.5690,10.4899},{-102.4052,459.4749}};
+float Ky[3] = {65.9847, 11.6463, 0.90461};
+float Kz[3] = {66.2867, 11.7091, 0.90864};
+float Lz[3][2]={{16.37,24.2094},{91.02,513.11},{8376,61540.3}};
+float Ly[3][2]={{16.37,24.2094},{91.02,513.11},{8376,61540.3}};
 
-float Ky[3] = {65.9847, 11.6463, 0.9046};
-float Kz[3]={66.2867, 11.7091, 0.9086};
 
 float dt = 0.001;
 
+int cont = 0;
 
 
-//float Ly[3][2]={{1.9992,0.9468},{18.4486,10.5064},{-120.7012,535.4784}}; //ganhos mais leves
-//float Lz[3][2]={{1.9992,0.9468},{18.4486,10.5064},{-120.7012,535.4784}};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,6 +120,9 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void set_pwmY(float saida);
 void set_pwmZ(float saida);
+void set_dirY(float saida);
+void set_dirZ(float saida);
+void get_ALC();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -191,34 +200,88 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 
 	  //gera a saida
+
+
 	  uz = 0 - (zhat[0]*Kz[0]+zhat[1]*Kz[1]+zhat[2]*Kz[2]);
 	  uy = 0 - (yhat[0]*Ky[0]+yhat[1]*Ky[1]+yhat[2]*Ky[2]);
+
 
 	  set_pwmY(uy);
 	  set_pwmZ(uz);
 
+	  if(cont>=100)
+	  {
+		  set_dirY(uy);
+		  set_dirZ(uz);
+		  cont=0;
+	  }else
+	  {
+		  cont++;
+	  }
   }
 }
 
+void set_dirY(float saida)
+{
+	if(saida>0)
+	{
+		motorY[0]=0;
+		motorY[1]=1;
+	}
+	else
+	{
+		motorY[0]=1;
+		motorY[1]=0;
+	}
+	HAL_GPIO_WritePin(dirYa_GPIO_Port, dirYa_Pin, motorY[0]);
+	HAL_GPIO_WritePin(dirYb_GPIO_Port, dirYb_Pin, motorY[1]);
+}
 
+void set_dirZ(float saida)
+{
+	if(saida>0)
+	{
+		motorZ[0]=1;
+		motorZ[1]=0;
+	}
+	else
+	{
+		motorZ[0]=0;
+		motorZ[1]=1;
+	}
+	HAL_GPIO_WritePin(dirZa_GPIO_Port, dirZa_Pin, motorZ[0]);
+	HAL_GPIO_WritePin(dirZb_GPIO_Port, dirZb_Pin, motorZ[1]);
+}
+void get_ALC()
+{
+	ALCy[0][0]=Ay[0][0] - (Ly[0][0]*Cy[0][0]+Ly[0][1]*Cy[1][0]);
+	ALCy[1][0]=Ay[1][0] - (Ly[1][0]*Cy[0][0]+Ly[1][1]*Cy[1][0]);
+	ALCy[2][0]=Ay[2][0] - (Ly[2][0]*Cy[0][0]+Ly[2][1]*Cy[1][0]);
+	ALCy[0][1]=Ay[0][1] - (Ly[0][0]*Cy[0][1]+Ly[0][1]*Cy[1][1]);
+	ALCy[1][1]=Ay[1][1] - (Ly[1][0]*Cy[0][1]+Ly[1][1]*Cy[1][1]);
+	ALCy[2][1]=Ay[2][1] - (Ly[2][0]*Cy[0][1]+Ly[2][1]*Cy[1][1]);
+	ALCy[0][2]=Ay[0][2] - (Ly[0][0]*Cy[0][2]+Ly[0][1]*Cy[1][2]);
+	ALCy[1][2]=Ay[1][2] - (Ly[1][0]*Cy[0][2]+Ly[1][1]*Cy[1][2]);
+	ALCy[2][2]=Ay[2][2] - (Ly[2][0]*Cy[0][2]+Ly[2][1]*Cy[1][2]);
+
+
+	ALCz[0][0]=Az[0][0] - (Lz[0][0]*Cz[0][0]+Lz[0][1]*Cz[1][0]);
+	ALCz[1][0]=Az[1][0] - (Lz[1][0]*Cz[0][0]+Lz[1][1]*Cz[1][0]);
+	ALCz[2][0]=Az[2][0] - (Lz[2][0]*Cz[0][0]+Lz[2][1]*Cz[1][0]);
+	ALCz[0][1]=Az[0][1] - (Lz[0][0]*Cz[0][1]+Lz[0][1]*Cz[1][1]);
+	ALCz[1][1]=Az[1][1] - (Lz[1][0]*Cz[0][1]+Lz[1][1]*Cz[1][1]);
+	ALCz[2][1]=Az[2][1] - (Lz[2][0]*Cz[0][1]+Lz[2][1]*Cz[1][1]);
+	ALCz[0][2]=Az[0][2] - (Lz[0][0]*Cz[0][2]+Lz[0][1]*Cz[1][2]);
+	ALCz[1][2]=Az[1][2] - (Lz[1][0]*Cz[0][2]+Lz[1][1]*Cz[1][2]);
+	ALCz[2][2]=Az[2][2] - (Lz[2][0]*Cz[0][2]+Lz[2][1]*Cz[1][2]);
+}
 
 
 void set_pwmY(float saida)
 {
-	saida=saida*800000;
-	if(saida>0)
-	{
-		pwmY = (uint16_t) saida;
-		motorY[0]=1;
-		motorY[1]=0;
-	}
-	else
-	{
-		saida = (uint16_t) -saida;
-		motorY[0]=0;
-		motorY[1]=1;
-	}
-	if(pwmY>1919)
+	saida=saida*8000;
+	saida = (uint16_t) saida;
+	if(saida>1919)
 	{
 		pwmY = 1919;
 	}
@@ -227,26 +290,13 @@ void set_pwmY(float saida)
 		pwmY=saida;
 	}
 	__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1,pwmY);
-	HAL_GPIO_WritePin(dirYa_GPIO_Port, dirYa_Pin, motorY[0]);
-	HAL_GPIO_WritePin(dirYb_GPIO_Port, dirYb_Pin, motorY[1]);
-
 }
 void set_pwmZ(float saida)
 {
-	saida=saida*800000;
-	if(saida>0)
-	{
-		saida = (uint16_t) saida;
-		motorZ[0]=0;
-		motorZ[1]=1;
-	}
-	else
-	{
-		pwmZ = (uint16_t) -saida;
-		motorZ[0]=1;
-		motorZ[1]=0;
-	}
-	if(pwmZ>1919)
+	saida=saida*8000;
+	saida = (uint16_t) saida;
+
+	if(saida>1919)
 	{
 		pwmZ = 1919;
 	}
@@ -255,8 +305,6 @@ void set_pwmZ(float saida)
 		pwmZ=saida;
 	}
 	__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_3,pwmZ);
-	HAL_GPIO_WritePin(dirZa_GPIO_Port, dirZa_Pin, motorZ[0]);
-	HAL_GPIO_WritePin(dirZb_GPIO_Port, dirZb_Pin, motorZ[1]);
 
 }
 /* USER CODE END 0 */
@@ -299,11 +347,12 @@ int main(void)
       {
     	L3GD20_Write(ctrl_reg_val[i], ctrl_reg_add[i]);
       }
+     get_ALC();
      HAL_TIM_Base_Start_IT(&htim2);
      HAL_TIM_PWM_Init(&htim3);
      HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
      HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-     //set_pwmY(12);
+
 
   /* USER CODE END 2 */
 
